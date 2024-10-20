@@ -12,7 +12,6 @@ class Engine:
     def __init__(self):
         self.width = (WIDTH - INFO_PANEL_WIDTH) // CELL_SIZE
         self.height = (HEIGHT - LABEL_HEIGHT - BUTTON_AREA_HEIGHT) // CELL_SIZE
-        self.walls = set()
         self.foods = set()
         self.cells = []
         self.dead_cells = []
@@ -24,43 +23,43 @@ class Engine:
         self.food_positions = {}
         self.selected_cell = None
         self.paused = False
-        self.stats = {"avg_lifespan": 0, "avg_food_eaten": 0, "avg_distance": 0}
+        self.stats = {"avg_lifespan": 0, "avg_food_eaten": 0, "avg_distance": 0, "remaining_food": 0}
         self.log_file = self.create_log_file()
+        self.real_time = 0  # track real time
+        self.simulated_time = 0  # track simulated time
 
     def create_log_file(self):
-        if not os.path.exists("logs"):
-            os.makedirs("logs")
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        return open(f"../logs/simulation_{timestamp}.log", "w")
-
-    def add_wall(self, x, y):
-        self.walls.add((x, y))
+        return open(os.path.join(log_dir, f"simulation_{timestamp}.log"), "w")
 
     def add_food(self, x, y):
-        if (x, y) not in self.walls and (x, y) not in self.cell_positions:
-            self.foods.add(Food(x, y))
-            self.food_positions[(x, y)] = True
-        else:
-            self.add_food(random.randint(1, self.width - 2), random.randint(1, self.height - 2))
+        food = Food(x, y)
+        self.foods.add(food)
+        self.food_positions[(int(x), int(y))] = food
 
     def add_cell(self, x, y):
-        if (x, y) not in self.walls and (x, y) not in self.food_positions:
-            cell = Cell(x, y)
-            self.cells.append(cell)
-            self.cell_positions[(int(x), int(y))] = cell
-        else:
-            self.add_cell(random.randint(1, self.width - 2), random.randint(1, self.height - 2))
+        cell = Cell(x, y)
+        cell.birth_time = self.simulated_time
+        self.cells.append(cell)
+        self.cell_positions[(int(x), int(y))] = cell
+
+    def is_food(self, x, y):
+        return (int(x) % self.width, int(y) % self.height) in self.food_positions
 
     def update(self):
         if not self.paused:
-            self.time += 1 / FPS * self.speed
+            self.real_time += 1 / FPS
+            self.simulated_time += (1 / FPS) * self.speed
             new_cells = []
             self.cell_positions.clear()
 
             for cell in self.cells:
                 if cell.update(self, self.speed):
                     new_cells.append(cell)
-                    new_pos = (int(cell.x), int(cell.y))
+                    new_pos = (int(cell.x) % self.width, int(cell.y) % self.height)
                     self.cell_positions[new_pos] = cell
                     
                     if new_pos in self.food_positions:
@@ -69,63 +68,62 @@ class Engine:
                         self.foods = {food for food in self.foods if (food.x, food.y) != new_pos}
                         self.food_positions.pop(new_pos)
                         if RESPAWN_FOOD:
-                            self.add_food(random.randint(1, self.width - 2), random.randint(1, self.height - 2))
+                            self.add_food(random.randint(0, self.width - 1), random.randint(0, self.height - 1))
                 else:
+                    cell.die(self.simulated_time)
                     self.dead_cells.append(cell)
 
             self.cells = new_cells
 
-            if self.time >= GENERATION_TIME or len(self.cells) == 0:
+            if self.simulated_time >= GENERATION_TIME or len(self.cells) == 0:
                 self.calculate_stats()
                 self.log_stats()
                 self.next_generation()
 
+
     def calculate_stats(self):
         all_cells = self.cells + self.dead_cells
         if all_cells:
-            self.stats["avg_lifespan"] = sum(cell.lifetime for cell in all_cells) / len(all_cells)
+            self.stats["avg_lifespan"] = sum(cell.get_lifespan(self.simulated_time) for cell in all_cells) / len(all_cells)
             self.stats["avg_food_eaten"] = sum(cell.food_eaten for cell in all_cells) / len(all_cells)
             self.stats["avg_distance"] = sum(cell.distance_traveled for cell in all_cells) / len(all_cells)
         else:
             self.stats["avg_lifespan"] = 0
             self.stats["avg_food_eaten"] = 0
             self.stats["avg_distance"] = 0
+        self.stats["remaining_food"] = len(self.foods)
 
     def log_stats(self):
         log_entry = f"Generation {self.generation}: "
         log_entry += f"Avg Lifespan: {self.stats['avg_lifespan']:.2f}, "
         log_entry += f"Avg Food Eaten: {self.stats['avg_food_eaten']:.2f}, "
-        log_entry += f"Avg Distance: {self.stats['avg_distance']:.2f}\n"
+        log_entry += f"Avg Distance: {self.stats['avg_distance']:.2f}, "
+        log_entry += f"Remaining Food: {self.stats['remaining_food']}\n"
         self.log_file.write(log_entry)
         self.log_file.flush()
 
     def draw(self, screen):
-        # Draw background
-        screen.fill(LIGHT_BLUE)
-        pygame.draw.rect(screen, WHITE, (0, LABEL_HEIGHT, WIDTH - INFO_PANEL_WIDTH, HEIGHT - LABEL_HEIGHT - BUTTON_AREA_HEIGHT))
-
-        # Draw simulation elements
-        for wall in self.walls:
-            pygame.draw.rect(screen, BLACK, (wall[0] * CELL_SIZE, wall[1] * CELL_SIZE + LABEL_HEIGHT, CELL_SIZE, CELL_SIZE))
+        screen.fill(WHITE)
         for food in self.foods:
             pygame.draw.rect(screen, DARK_BLUE, (food.x * CELL_SIZE, food.y * CELL_SIZE + LABEL_HEIGHT, CELL_SIZE, CELL_SIZE))
         for cell in self.cells:
             color = tuple(int(c * (1 - cell.energy / CELL_ENERGY_MAX) + g * (cell.energy / CELL_ENERGY_MAX)) for c, g in zip(RED, GREEN))
-            pygame.draw.circle(screen, color, (int(cell.x * CELL_SIZE + CELL_SIZE // 2), 
-                                               int(cell.y * CELL_SIZE + CELL_SIZE // 2) + LABEL_HEIGHT), CELL_SIZE // 2)
+            pygame.draw.circle(screen, color, (int(cell.x * CELL_SIZE + CELL_SIZE // 2) % (self.width * CELL_SIZE), 
+                                               int(cell.y * CELL_SIZE + CELL_SIZE // 2) % (self.height * CELL_SIZE) + LABEL_HEIGHT), CELL_SIZE // 2)
             if self.show_vision:
                 for angle in [-30, 0, 30]:
                     vision_angle = (cell.orientation + angle) % 360
-                    end_x = cell.x * CELL_SIZE + np.cos(np.radians(vision_angle)) * VISION_RANGE * CELL_SIZE
-                    end_y = cell.y * CELL_SIZE + np.sin(np.radians(vision_angle)) * VISION_RANGE * CELL_SIZE
+                    end_x = (cell.x + np.cos(np.radians(vision_angle)) * VISION_RANGE) % self.width
+                    end_y = (cell.y + np.sin(np.radians(vision_angle)) * VISION_RANGE) % self.height
                     pygame.draw.line(screen, GREY, 
-                                     (int(cell.x * CELL_SIZE + CELL_SIZE // 2), int(cell.y * CELL_SIZE + CELL_SIZE // 2) + LABEL_HEIGHT),
-                                     (int(end_x + CELL_SIZE // 2), int(end_y + CELL_SIZE // 2) + LABEL_HEIGHT), 1)
+                                     (int(cell.x * CELL_SIZE + CELL_SIZE // 2) % (self.width * CELL_SIZE), 
+                                      int(cell.y * CELL_SIZE + CELL_SIZE // 2) % (self.height * CELL_SIZE) + LABEL_HEIGHT),
+                                     (int(end_x * CELL_SIZE + CELL_SIZE // 2) % (self.width * CELL_SIZE), 
+                                      int(end_y * CELL_SIZE + CELL_SIZE // 2) % (self.height * CELL_SIZE) + LABEL_HEIGHT), 1)
 
-        # Draw info text
         font = pygame.font.Font(None, 36)
-        info_text = f"Cells: {len(self.cells)} | Food: {len(self.foods)} | Generation: {self.generation} | Time: {self.time:.1f}"
-        text_surface = font.render(info_text, True, BLACK)
+        info_text = f"Cells: {len(self.cells)} | Food: {len(self.foods)} | Generation: {self.generation} | Time: {self.simulated_time:.1f}"
+        text_surface = font.render(info_text, True, GREY)
         screen.blit(text_surface, (10, 10))
 
         self.draw_info_panel(screen)
@@ -189,22 +187,16 @@ class Engine:
         self.selected_cell = self.cell_positions.get((x, y))
 
     def initialize(self):
-        for x in range(self.width):
-            self.add_wall(x, 0)
-            self.add_wall(x, self.height - 1)
-        for y in range(self.height):
-            self.add_wall(0, y)
-            self.add_wall(self.width - 1, y)
-
         for _ in range(INITIAL_CELLS):
-            self.add_cell(random.randint(1, self.width - 2), random.randint(1, self.height - 2))
+            self.add_cell(random.uniform(0, self.width), random.uniform(0, self.height))
 
         for _ in range(INITIAL_FOOD):
-            self.add_food(random.randint(1, self.width - 2), random.randint(1, self.height - 2))
+            self.add_food(random.uniform(0, self.width), random.uniform(0, self.height))
 
     def next_generation(self):
         self.generation += 1
-        self.time = 0
+        self.real_time = 0
+        self.simulated_time = 0
 
         # Combine living and recently dead cells
         all_cells = self.cells + self.dead_cells
@@ -227,6 +219,10 @@ class Engine:
             new_cell = Cell(random.randint(1, self.width - 2), random.randint(1, self.height - 2))
             new_cells.append(new_cell)
 
+        # reset the brith time of each cell
+        for cell in new_cells:
+            cell.birth_time = self.simulated_time
+
         self.cells = new_cells
         self.dead_cells = []  # Clear the dead cells list
         self.cell_positions = {(int(cell.x), int(cell.y)): cell for cell in self.cells}
@@ -236,12 +232,6 @@ class Engine:
         self.food_positions.clear()
         for _ in range(INITIAL_FOOD):
             self.add_food(random.randint(1, self.width - 2), random.randint(1, self.height - 2))
-
-    def is_wall(self, x, y):
-        return (x, y) in self.walls
-
-    def is_food(self, x, y):
-        return (x, y) in self.food_positions
 
     def toggle_vision(self):
         self.show_vision = not self.show_vision
@@ -264,7 +254,8 @@ class Engine:
     
     def restart(self):
         self.generation = 1
-        self.time = 0
+        self.real_time = 0
+        self.simulated_time = 0
         self.cells.clear()
         self.dead_cells.clear()
         self.cell_positions.clear()

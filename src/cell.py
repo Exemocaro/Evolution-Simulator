@@ -14,6 +14,8 @@ class Cell:
         self.last_outputs = None
         self.food_eaten = 0
         self.distance_traveled = 0
+        self.birth_time = 0  # Time when the cell was created
+        self.death_time = None  # Time when the cell died (None if still alive)
 
     def draw(self, screen):
         color = tuple(int(c * (1 - self.energy / CELL_ENERGY_MAX) + g * (self.energy / CELL_ENERGY_MAX)) for c, g in zip(RED, GREEN))
@@ -30,12 +32,20 @@ class Cell:
                              (int(end_x + CELL_SIZE // 2), int(end_y + CELL_SIZE // 2)), 1)
 
     def update(self, environment, speed):
-        self.lifetime += 1
+        self.lifetime += 1 #/ speed  # Adjust lifetime based on speed
         self.energy -= CELL_IDLE_COST * speed
         self.last_inputs = self.get_inputs(environment)
         self.last_outputs = self.brain.forward(self.last_inputs)
         self.process_outputs(self.last_outputs, environment, speed)
         return self.energy > 0
+    
+    def die(self, current_time):
+        self.death_time = current_time
+
+    def get_lifespan(self, current_time):
+        if self.death_time is not None:
+            return self.death_time - self.birth_time
+        return current_time - self.birth_time
     
     def get_info(self):
         return {
@@ -63,10 +73,10 @@ class Cell:
             for j in range(1, VISION_RANGE + 1):
                 check_x = int(self.x + dx * j)
                 check_y = int(self.y + dy * j)
-                if environment.is_wall(check_x, check_y):
-                    vision_inputs[i*2:i*2+2] = [j / VISION_RANGE, 0]
-                    break
-                elif environment.is_food(check_x, check_y):
+                #if environment.is_wall(check_x, check_y):
+                #    vision_inputs[i*2:i*2+2] = [j / VISION_RANGE, 0]
+                #    break
+                if environment.is_food(check_x, check_y):
                     vision_inputs[i*2:i*2+2] = [j / VISION_RANGE, 1]
                     break
             else:
@@ -85,13 +95,11 @@ class Cell:
         if move > 0.5:
             dx = np.cos(np.radians(self.orientation)) * 0.1 * speed
             dy = np.sin(np.radians(self.orientation)) * 0.1 * speed
-            new_x = self.x + dx
-            new_y = self.y + dy
-            if not environment.is_wall(int(new_x), int(new_y)):
-                self.distance_traveled += np.sqrt(dx**2 + dy**2)
-                self.x = new_x
-                self.y = new_y
-                self.energy -= CELL_MOVE_COST * speed
+            new_x = (self.x + dx) % environment.width
+            new_y = (self.y + dy) % environment.height
+            self.distance_traveled += np.sqrt(dx**2 + dy**2)
+            self.x, self.y = new_x, new_y
+            self.energy -= CELL_MOVE_COST * speed
 
         self.orientation %= 360
         self.energy = max(CELL_ENERGY_MIN, min(CELL_ENERGY_MAX, self.energy))

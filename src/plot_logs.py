@@ -10,21 +10,23 @@ def parse_log_file(file_path):
     lifespans = []
     food_eaten = []
     distances = []
+    remaining_food = []
 
     with open(file_path, 'r') as file:
         for line in file:
-            match = re.match(r'Generation (\d+): Avg Lifespan: ([\d.]+), Avg Food Eaten: ([\d.]+), Avg Distance: ([\d.]+)', line)
+            match = re.match(r'Generation (\d+): Avg Lifespan: ([\d.]+), Avg Food Eaten: ([\d.]+), Avg Distance: ([\d.]+), Remaining Food: (\d+)', line)
             if match:
-                gen, lifespan, food, distance = map(float, match.groups())
+                gen, lifespan, food, distance, remain = map(float, match.groups())
                 generations.append(gen)
                 lifespans.append(lifespan)
                 food_eaten.append(food)
                 distances.append(distance)
+                remaining_food.append(remain)
 
-    return generations, lifespans, food_eaten, distances
+    return generations, lifespans, food_eaten, distances, remaining_food
 
-def plot_data(generations, lifespans, food_eaten, distances):
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+def plot_data(generations, lifespans, food_eaten, distances, remaining_food):
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
     
     line1, = ax1.plot(generations, lifespans, 'b-')
     ax1.set_ylabel('Average Lifespan')
@@ -34,36 +36,55 @@ def plot_data(generations, lifespans, food_eaten, distances):
     ax2.set_ylabel('Average Food Eaten')
 
     line3, = ax3.plot(generations, distances, 'r-')
-    ax3.set_xlabel('Generation')
     ax3.set_ylabel('Average Distance')
+
+    line4, = ax4.plot(generations, remaining_food, 'm-')
+    ax4.set_xlabel('Generation')
+    ax4.set_ylabel('Remaining Food')
 
     plt.tight_layout()
 
-    return fig, (line1, line2, line3)
+    return fig, (line1, line2, line3, line4)
 
-def on_hover(event, lines, annotations):
-    for line, ann in zip(lines, annotations):
-        if line.contains(event)[0]:
-            vis = ann.get_visible()
-            ann.set_visible(not vis)
-            event.canvas.draw_idle()
+def update_annot(line, ann, event):
+    x, y = line.get_data()
+    xdata = event.xdata
+    index = min(range(len(x)), key=lambda i: abs(x[i]-xdata))
+    ann.xy = (x[index], y[index])
+    text = f"Generation: {x[index]:.0f}\nValue: {y[index]:.2f}"
+    ann.set_text(text)
+    ann.get_bbox_patch().set_alpha(0.4)
+
+def hover(event, fig, lines, annotations):
+    vis = annotations[0].get_visible()
+    if event.inaxes in fig.axes:
+        for line, ann in zip(lines, annotations):
+            cont, _ = line.contains(event)
+            if cont:
+                update_annot(line, ann, event)
+                ann.set_visible(True)
+                fig.canvas.draw_idle()
+            else:
+                if vis:
+                    ann.set_visible(False)
+                    fig.canvas.draw_idle()
 
 def select_and_plot_log():
     root = tk.Tk()
     root.withdraw()  # Hide the main window
 
-    log_dir = os.path.join(os.path.dirname(__file__), 'logs')
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
     file_path = filedialog.askopenfilename(initialdir=log_dir, title="Select log file",
                                            filetypes=(("Log files", "*.log"), ("All files", "*.*")))
 
     if file_path:
-        generations, lifespans, food_eaten, distances = parse_log_file(file_path)
+        generations, lifespans, food_eaten, distances, remaining_food = parse_log_file(file_path)
         
         if not generations:
             print("No data found in the selected log file.")
             return
 
-        fig, lines = plot_data(generations, lifespans, food_eaten, distances)
+        fig, lines = plot_data(generations, lifespans, food_eaten, distances, remaining_food)
 
         # Create annotations for each line
         annotations = []
@@ -74,36 +95,13 @@ def select_and_plot_log():
             ann.set_visible(False)
             annotations.append(ann)
 
-        def update_annot(line, ann, event):
-            x, y = line.get_data()
-            xdata = event.xdata
-            index = min(range(len(x)), key=lambda i: abs(x[i]-xdata))
-            ann.xy = (x[index], y[index])
-            text = f"Generation: {x[index]:.0f}\nValue: {y[index]:.2f}"
-            ann.set_text(text)
-            ann.get_bbox_patch().set_alpha(0.4)
-
-        def hover(event):
-            vis = annotations[0].get_visible()
-            if event.inaxes in fig.axes:
-                for line, ann in zip(lines, annotations):
-                    cont, _ = line.contains(event)
-                    if cont:
-                        update_annot(line, ann, event)
-                        ann.set_visible(True)
-                        fig.canvas.draw_idle()
-                    else:
-                        if vis:
-                            ann.set_visible(False)
-                            fig.canvas.draw_idle()
-
         # Create a new window to display the plot
         plot_window = tk.Toplevel(root)
         plot_window.title("Evolution Simulation Statistics")
 
         canvas = FigureCanvasTkAgg(fig, master=plot_window)
         canvas.draw()
-        canvas.mpl_connect("motion_notify_event", hover)
+        canvas.mpl_connect("motion_notify_event", lambda event: hover(event, fig, lines, annotations))
 
         # Add toolbar
         toolbar = NavigationToolbar2Tk(canvas, plot_window)
