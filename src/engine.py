@@ -1,6 +1,8 @@
 import pygame
 import random
 import numpy as np
+import os
+import datetime
 from config import *
 from wall import Wall
 from food import Food
@@ -22,6 +24,14 @@ class Engine:
         self.food_positions = {}
         self.selected_cell = None
         self.paused = False
+        self.stats = {"avg_lifespan": 0, "avg_food_eaten": 0, "avg_distance": 0}
+        self.log_file = self.create_log_file()
+
+    def create_log_file(self):
+        if not os.path.exists("logs"):
+            os.makedirs("logs")
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        return open(f"../logs/simulation_{timestamp}.log", "w")
 
     def add_wall(self, x, y):
         self.walls.add((x, y))
@@ -55,17 +65,39 @@ class Engine:
                     
                     if new_pos in self.food_positions:
                         cell.energy = min(CELL_ENERGY_MAX, cell.energy + FOOD_ENERGY)
+                        cell.food_eaten += 1
                         self.foods = {food for food in self.foods if (food.x, food.y) != new_pos}
                         self.food_positions.pop(new_pos)
                         if RESPAWN_FOOD:
                             self.add_food(random.randint(1, self.width - 2), random.randint(1, self.height - 2))
                 else:
-                    self.dead_cells.append(cell)  # Add dead cells to the dead_cells list
+                    self.dead_cells.append(cell)
 
             self.cells = new_cells
 
             if self.time >= GENERATION_TIME or len(self.cells) == 0:
+                self.calculate_stats()
+                self.log_stats()
                 self.next_generation()
+
+    def calculate_stats(self):
+        all_cells = self.cells + self.dead_cells
+        if all_cells:
+            self.stats["avg_lifespan"] = sum(cell.lifetime for cell in all_cells) / len(all_cells)
+            self.stats["avg_food_eaten"] = sum(cell.food_eaten for cell in all_cells) / len(all_cells)
+            self.stats["avg_distance"] = sum(cell.distance_traveled for cell in all_cells) / len(all_cells)
+        else:
+            self.stats["avg_lifespan"] = 0
+            self.stats["avg_food_eaten"] = 0
+            self.stats["avg_distance"] = 0
+
+    def log_stats(self):
+        log_entry = f"Generation {self.generation}: "
+        log_entry += f"Avg Lifespan: {self.stats['avg_lifespan']:.2f}, "
+        log_entry += f"Avg Food Eaten: {self.stats['avg_food_eaten']:.2f}, "
+        log_entry += f"Avg Distance: {self.stats['avg_distance']:.2f}\n"
+        self.log_file.write(log_entry)
+        self.log_file.flush()
 
     def draw(self, screen):
         # Draw background
@@ -105,6 +137,14 @@ class Engine:
         if self.selected_cell:
             self.draw_cell_info(screen, self.selected_cell)
             self.draw_neural_network(screen, self.selected_cell)
+
+        # Draw stats
+        font = pygame.font.Font(None, 24)
+        y = HEIGHT - 120
+        for stat, value in self.stats.items():
+            text = font.render(f"{stat.replace('_', ' ').title()}: {value:.2f}", True, BLACK)
+            screen.blit(text, (WIDTH - INFO_PANEL_WIDTH + 10, y))
+            y += 30
 
     def draw_neural_network(self, screen, cell):
         activations = cell.get_neuron_activations()
@@ -231,4 +271,10 @@ class Engine:
         self.foods.clear()
         self.food_positions.clear()
         self.selected_cell = None
+        self.log_file.close()
+        self.log_file = self.create_log_file()
         self.initialize()
+
+    def __del__(self):
+        if hasattr(self, 'log_file'):
+            self.log_file.close()

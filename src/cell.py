@@ -12,6 +12,8 @@ class Cell:
         self.lifetime = 0
         self.last_inputs = None
         self.last_outputs = None
+        self.food_eaten = 0
+        self.distance_traveled = 0
 
     def draw(self, screen):
         color = tuple(int(c * (1 - self.energy / CELL_ENERGY_MAX) + g * (self.energy / CELL_ENERGY_MAX)) for c, g in zip(RED, GREEN))
@@ -86,6 +88,7 @@ class Cell:
             new_x = self.x + dx
             new_y = self.y + dy
             if not environment.is_wall(int(new_x), int(new_y)):
+                self.distance_traveled += np.sqrt(dx**2 + dy**2)
                 self.x = new_x
                 self.y = new_y
                 self.energy -= CELL_MOVE_COST * speed
