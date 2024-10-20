@@ -106,8 +106,17 @@ class Cell:
 
     def reproduce(self):
         child_weights = self.brain.weights.copy()
-        mask = np.random.random(child_weights.shape) < MUTATION_RATE
-        child_weights[mask] += np.random.normal(0, MUTATION_AMOUNT, mask.sum())
+        
+        # Generate random values between -0.5 and 0.5
+        t = np.random.uniform(-0.5, 0.5, child_weights.shape)
+        
+        # Create mask for mutation
+        mask = np.abs(t) < MUTATION_RATE / 2
+        
+        # Apply mutations
+        mutations = np.random.normal(0, MUTATION_AMOUNT, mask.sum())
+        child_weights[mask] += mutations
+        
         return Cell(self.x, self.y, child_weights)
 
 class NeuralNetwork:
