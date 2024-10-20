@@ -1,0 +1,67 @@
+1. Self-replication
+2. Blueprint
+3. Inherit Blueprint
+4. Mutation
+5. Selection (for mating)
+
+
+I want to write a program that simulates evolution. These are the main components of the evolution sim:
+
+The map:
+    - it's enclosed by walls
+    - can contain walls in the middle of it, to divide the map in sections.
+    - will have the "cell"s, or beings, which move around it, and can not go through walls.
+    - food. These will spawn regularly and give energy to each being that eats it.
+
+The "cell"s:
+    - represent a single-celled organism. It consists of:
+        - a small neural network inside that will guide its behaviour.
+        - a genome that determines how that neural network, or brain, works.
+        - an "energy" value. The cell dies if its energy reaches 0.
+        - an orientation value, representing where the cell is turned to, in degrees.
+    Also have a position (x and y), but they aren't aware of it (it's not a sensory input in its network)
+    They're represented by a color according to its genome.
+
+Neural networks:
+    The inputs consist of "sensory" values that represent information about the environment near it, as well as values from the cell itself
+    The outputs consist of "action"s or "function"s the cell can do.
+    Each output is a number between 0 and 1. The activation functions are a tanh.
+
+The genome:
+    Controls the weights between the input and the output neurons.
+    Each gene equals one weight.
+
+Cell Actions:
+    - Each cell can do the following actions, represented by an output neuron in its brain:
+        - rotate clockwise
+        - rotate counter clockwise
+        - move to its current orientation.
+    
+Cell Sensory values:
+    - Each cell will pass the following into the neural network. You can consider each as it's own "sense".
+        - its energy value
+        - its orientation value (the angle)
+        - 3 vision neurons, separated by 30 degrees each. One in front of the cell, the other 2 are 30 degrees to each side.
+            - the value represents the distance to the nearest object/thing/cell
+        - 3 respective neurons indicating what's in its vision neurons.
+            - a 0 would be a wall, a 1 would be a food source
+
+Mechanics:
+    The map:
+        Needs to represent the cells, the food, and the walls.
+        I need an ability to toggle the cells vision "lines".
+        Move and zoom the camera around.
+        Select a cell to inspect it.
+    Cell behaviour:
+        Cells can rotate and move according to their value in the output neurons.
+        Each time they move, they lose some energy. The more they move, the more they lose energy (some log function)
+        When they hit a wall, they stop. They can't go over walls.
+        When they hit a food source, they "eat" it and get some energy.
+        When they hit another cell, nothing happens, (for now they can go over each other).
+        When they die, they disappear from the map (for now, maybe I'll change it later)
+    Simulation behaviour:
+        Each simulation/generation will be run for an X amount of seconds.
+        When the simulation ends, the cells that are alive (or the ones that survived the most) will get their genome copied, and it will be used on the next generation
+        After each generation, a small mutation will be applied to the cells' genomes.
+        After each simulation round, some logs need to be displayed.
+    
