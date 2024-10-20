@@ -43,6 +43,9 @@ def main():
                 elif event.button == 3:  # Right click
                     if speed_button.collidepoint(event.pos):
                         engine.decrease_speed()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    engine.toggle_pause()
 
         engine.update()
         engine.draw(screen)

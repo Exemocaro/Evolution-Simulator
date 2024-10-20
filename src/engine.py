@@ -65,8 +65,8 @@ class Engine:
                     if new_pos in self.food_positions:
                         cell.energy = min(CELL_ENERGY_MAX, cell.energy + FOOD_ENERGY)
                         cell.food_eaten += 1
-                        self.foods = {food for food in self.foods if (food.x, food.y) != new_pos}
-                        self.food_positions.pop(new_pos)
+                        food_to_remove = self.food_positions.pop(new_pos)
+                        self.foods.remove(food_to_remove)  # Remove the food object from self.foods
                         if RESPAWN_FOOD:
                             self.add_food(random.randint(0, self.width - 1), random.randint(0, self.height - 1))
                 else:
@@ -79,7 +79,6 @@ class Engine:
                 self.calculate_stats()
                 self.log_stats()
                 self.next_generation()
-
 
     def calculate_stats(self):
         all_cells = self.cells + self.dead_cells
@@ -109,17 +108,29 @@ class Engine:
         for cell in self.cells:
             color = tuple(int(c * (1 - cell.energy / CELL_ENERGY_MAX) + g * (cell.energy / CELL_ENERGY_MAX)) for c, g in zip(RED, GREEN))
             pygame.draw.circle(screen, color, (int(cell.x * CELL_SIZE + CELL_SIZE // 2) % (self.width * CELL_SIZE), 
-                                               int(cell.y * CELL_SIZE + CELL_SIZE // 2) % (self.height * CELL_SIZE) + LABEL_HEIGHT), CELL_SIZE // 2)
+                                            int(cell.y * CELL_SIZE + CELL_SIZE // 2) % (self.height * CELL_SIZE) + LABEL_HEIGHT), CELL_SIZE // 2)
             if self.show_vision:
                 for angle in [-30, 0, 30]:
                     vision_angle = (cell.orientation + angle) % 360
                     end_x = (cell.x + np.cos(np.radians(vision_angle)) * VISION_RANGE) % self.width
                     end_y = (cell.y + np.sin(np.radians(vision_angle)) * VISION_RANGE) % self.height
-                    pygame.draw.line(screen, GREY, 
-                                     (int(cell.x * CELL_SIZE + CELL_SIZE // 2) % (self.width * CELL_SIZE), 
-                                      int(cell.y * CELL_SIZE + CELL_SIZE // 2) % (self.height * CELL_SIZE) + LABEL_HEIGHT),
-                                     (int(end_x * CELL_SIZE + CELL_SIZE // 2) % (self.width * CELL_SIZE), 
-                                      int(end_y * CELL_SIZE + CELL_SIZE // 2) % (self.height * CELL_SIZE) + LABEL_HEIGHT), 1)
+                    
+                    # Calculate intermediate points for drawing
+                    steps = 20  # Increase the number of steps for smoother lines
+                    for i in range(steps):
+                        start_x = (cell.x + i * np.cos(np.radians(vision_angle)) * VISION_RANGE / steps) % self.width
+                        start_y = (cell.y + i * np.sin(np.radians(vision_angle)) * VISION_RANGE / steps) % self.height
+                        end_x = (cell.x + (i+1) * np.cos(np.radians(vision_angle)) * VISION_RANGE / steps) % self.width
+                        end_y = (cell.y + (i+1) * np.sin(np.radians(vision_angle)) * VISION_RANGE / steps) % self.height
+                        
+                        # Check if the line segment crosses the map boundary
+                        if (abs(end_x - start_x) < self.width / 2 and 
+                            abs(end_y - start_y) < self.height / 2):
+                            pygame.draw.line(screen, GREY, 
+                                            (int(start_x * CELL_SIZE + CELL_SIZE // 2), 
+                                            int(start_y * CELL_SIZE + CELL_SIZE // 2) + LABEL_HEIGHT),
+                                            (int(end_x * CELL_SIZE + CELL_SIZE // 2), 
+                                            int(end_y * CELL_SIZE + CELL_SIZE // 2) + LABEL_HEIGHT), 1)
 
         font = pygame.font.Font(None, 36)
         info_text = f"Cells: {len(self.cells)} | Food: {len(self.foods)} | Generation: {self.generation} | Time: {self.simulated_time:.1f}"
@@ -243,14 +254,12 @@ class Engine:
         self.paused = not self.paused
 
     def increase_speed(self):
-        speeds = [0.5, 1, 2, 4, 8]
-        current_index = speeds.index(self.speed)
-        self.speed = speeds[min(current_index + 1, len(speeds) - 1)]
+        current_index = SIMULATION_SPEEDS.index(self.speed)
+        self.speed = SIMULATION_SPEEDS[(current_index + 1) % len(SIMULATION_SPEEDS)]
 
     def decrease_speed(self):
-        speeds = [0.5, 1, 2, 4, 8]
-        current_index = speeds.index(self.speed)
-        self.speed = speeds[max(current_index - 1, 0)]
+        current_index = SIMULATION_SPEEDS.index(self.speed)
+        self.speed = SIMULATION_SPEEDS[(current_index - 1) % len(SIMULATION_SPEEDS)]
     
     def restart(self):
         self.generation = 1
