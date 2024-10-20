@@ -26,7 +26,7 @@ def parse_log_file(file_path):
     return generations, lifespans, food_eaten, distances, remaining_food
 
 def plot_data(generations, lifespans, food_eaten, distances, remaining_food):
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
     
     line1, = ax1.plot(generations, lifespans, 'b-')
     ax1.set_ylabel('Average Lifespan')
@@ -82,6 +82,7 @@ def select_and_plot_log():
         
         if not generations:
             print("No data found in the selected log file.")
+            root.quit()
             return
 
         fig, lines = plot_data(generations, lifespans, food_eaten, distances, remaining_food)
@@ -110,9 +111,16 @@ def select_and_plot_log():
         canvas_widget = canvas.get_tk_widget()
         canvas_widget.pack(fill=tk.BOTH, expand=True)
 
-        plot_window.mainloop()
+        # Set up proper closure of the application
+        def on_closing():
+            plot_window.destroy()
+            root.quit()
+
+        plot_window.protocol("WM_DELETE_WINDOW", on_closing)
+        root.mainloop()
     else:
         print("No file selected.")
+        root.quit()
 
 if __name__ == "__main__":
     select_and_plot_log()

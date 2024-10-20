@@ -66,12 +66,14 @@ class Engine:
                         cell.energy = min(CELL_ENERGY_MAX, cell.energy + FOOD_ENERGY)
                         cell.food_eaten += 1
                         food_to_remove = self.food_positions.pop(new_pos)
-                        self.foods.remove(food_to_remove)  # Remove the food object from self.foods
+                        self.foods.remove(food_to_remove)
                         if RESPAWN_FOOD:
                             self.add_food(random.randint(0, self.width - 1), random.randint(0, self.height - 1))
                 else:
                     cell.die(self.simulated_time)
                     self.dead_cells.append(cell)
+                    if cell == self.selected_cell:
+                        self.selected_cell = None
 
             self.cells = new_cells
 
@@ -107,8 +109,14 @@ class Engine:
             pygame.draw.rect(screen, DARK_BLUE, (food.x * CELL_SIZE, food.y * CELL_SIZE + LABEL_HEIGHT, CELL_SIZE, CELL_SIZE))
         for cell in self.cells:
             color = tuple(int(c * (1 - cell.energy / CELL_ENERGY_MAX) + g * (cell.energy / CELL_ENERGY_MAX)) for c, g in zip(RED, GREEN))
-            pygame.draw.circle(screen, color, (int(cell.x * CELL_SIZE + CELL_SIZE // 2) % (self.width * CELL_SIZE), 
-                                            int(cell.y * CELL_SIZE + CELL_SIZE // 2) % (self.height * CELL_SIZE) + LABEL_HEIGHT), CELL_SIZE // 2)
+            cell_center = (int(cell.x * CELL_SIZE + CELL_SIZE // 2) % (self.width * CELL_SIZE), 
+                           int(cell.y * CELL_SIZE + CELL_SIZE // 2) % (self.height * CELL_SIZE) + LABEL_HEIGHT)
+            pygame.draw.circle(screen, color, cell_center, CELL_SIZE // 2)
+            
+            # Draw a black circle around the selected cell
+            if cell == self.selected_cell:
+                pygame.draw.circle(screen, BLACK, cell_center, CELL_SIZE * 0.75 + 2, 2)
+                
             if self.show_vision:
                 for angle in [-30, 0, 30]:
                     vision_angle = (cell.orientation + angle) % 360
@@ -193,9 +201,25 @@ class Engine:
 
     def select_cell(self, mouse_pos):
         x, y = mouse_pos
-        x = (x - CELL_SIZE // 2) // CELL_SIZE
-        y = (y - LABEL_HEIGHT - CELL_SIZE // 2) // CELL_SIZE
-        self.selected_cell = self.cell_positions.get((x, y))
+        grid_x = x // CELL_SIZE
+        grid_y = (y - LABEL_HEIGHT) // CELL_SIZE
+        
+        nearest_cell = None
+        nearest_distance = float('inf')
+
+        # Check cells in a 5x5 area around the clicked position
+        for dx in range(-2, 3):
+            for dy in range(-2, 3):
+                check_x = (grid_x + dx) % self.width
+                check_y = (grid_y + dy) % self.height
+                if (check_x, check_y) in self.cell_positions:
+                    cell = self.cell_positions[(check_x, check_y)]
+                    distance = (cell.x - grid_x)**2 + (cell.y - grid_y)**2
+                    if distance < nearest_distance:
+                        nearest_cell = cell
+                        nearest_distance = distance
+
+        self.selected_cell = nearest_cell
 
     def initialize(self):
         for _ in range(INITIAL_CELLS):
@@ -208,6 +232,7 @@ class Engine:
         self.generation += 1
         self.real_time = 0
         self.simulated_time = 0
+        self.selected_cell = None
 
         # Combine living and recently dead cells
         all_cells = self.cells + self.dead_cells
@@ -265,6 +290,7 @@ class Engine:
         self.generation = 1
         self.real_time = 0
         self.simulated_time = 0
+        self.selected_cell = None
         self.cells.clear()
         self.dead_cells.clear()
         self.cell_positions.clear()
