@@ -1,0 +1,37 @@
+# Screen settings
+WIDTH, HEIGHT = 1200, 900  # Increased height for button area
+CELL_SIZE = 10
+LABEL_HEIGHT = 50
+INFO_PANEL_WIDTH = 300
+BUTTON_AREA_HEIGHT = 50
+
+# Colors
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GREEN = (0, 255, 0)
+RED = (255, 0, 0)
+GREY = (128, 128, 128)
+DARK_BLUE = (0, 0, 128)
+LIGHT_BLUE = (173, 216, 230)
+
+# Simulation settings
+FPS = 60
+INITIAL_CELLS = 100
+INITIAL_FOOD = 200
+GENERATION_TIME = 60
+RESPAWN_FOOD = False
+
+# Cell settings
+CELL_ENERGY_MAX = 100
+CELL_ENERGY_MIN = 0
+CELL_MOVE_COST = 0 #0.1
+CELL_ROTATE_COST = 0.025
+CELL_IDLE_COST = 0.1
+FOOD_ENERGY = 20
+
+# Mutation settings
+MUTATION_RATE = 0.1
+MUTATION_AMOUNT = 0.2
+
+# Vision settings
+VISION_RANGE = 6
